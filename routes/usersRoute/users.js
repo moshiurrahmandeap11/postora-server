@@ -165,4 +165,247 @@ router.post("/signin", async(req, res) => {
     };
 });
 
+
+// get a user by ID
+router.get("/:id", async(req, res) => {
+    try {
+        const {id} = req.params;
+        if(!id) {
+            return res.status(400).json({
+                success: false,
+                message: "ID required",
+            });
+        };
+
+        const result = await pool.query("SELECT id, name, email, role, updated_at, created_at FROM users WHERE id = $1", [id]);
+
+        if(result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: `user not exists with id ${id}`
+            });
+        };
+
+        res.status(200).json({
+            success: true,
+            message: "user fetched successfully",
+            data: result.rows[0],
+        });
+    } catch (error) {
+        console.error("user fetching failed :", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    };
+});
+
+
+// get a user by email 
+router.get("/email/:email", async(req, res) => {
+    try {
+        const {email} = req.params;
+        if(!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email required",
+            });
+        };
+
+        const result = await pool.query("SELECT id, name, email, role, created_at, updated_at FROM users WHERE email = $1", [email.toLowerCase()]);
+
+        if(result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: `user not found with email ${email}`
+            });
+        };
+
+        res.status(200).json({
+            success: true,
+            message: "user fetched successfully",
+            data: result.rows[0],
+        });
+    } catch (error) {
+        console.error("user fetching failed :", error);
+        res.status(500).json({
+            success: false,
+            message: "internal server error",
+        });
+    };
+});
+
+
+// update user data with patch by ID
+router.patch("/:id", async(req, res) => {
+    try {
+        const {id} = req.params;
+        const {name, email , old_password, new_password, confirm_new_password} = req.body;
+        if(!id) {
+            return res.status(400).json({
+                success: false,
+                message: "ID required",
+            });
+        };
+
+        // users exists check
+        const user_result = await pool.query("SELECT * FROM users where id = $1", [id]);
+
+        if(user_result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        };
+
+        const user = user_result.rows[0];
+
+        // build query dynamically
+        const fields = [];
+        const values = [];
+        let index = 1;
+
+        // name update
+        if(name) {
+            fields.push(`name = $${index++}`);
+            values.push(name.trim());
+        }
+
+        // email update
+        if(email) {
+            // email must be unique
+            const email_check = await pool.query("SELECT id FROM users WHERE email = $1 AND id != $1", [email.toLowerCase(), id])
+            if(email_check.rows.length > 0 ) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Email already in use",
+                });
+            };
+    
+            fields.push(`email = $${index++}`);
+            values.push(email.toLowerCase());
+            
+        };
+
+        // password update
+        if(new_password || confirm_new_password || old_password) {
+            if(!old_password) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Old password required to change password",
+                });
+            };
+
+            // password matching with hash
+            const isMatch = await bcrypt.compare(old_password, user.password);
+            if(!isMatch) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Incorrect old password",
+                });
+            };
+
+            if(!new_password || !confirm_new_password) {
+                return res.status(400).json({
+                    success: false,
+                    message: "New password and confirmation required",
+                });
+            };
+
+            if(new_password.length < 6) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Password must be at least 6 characters",
+                });
+            };
+
+            if(await bcrypt.compare(new_password, user.password)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "New password cannot be same as old password",
+                });
+            };
+
+            const new_hash_password = await bcrypt.hash(new_password, saltRounds);
+            fields.push(`password = $${index++}`);
+            values.push(new_hash_password);
+
+        }
+
+        if(fields.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "No fields to update",
+            });
+        }
+
+
+        values.push(id);
+
+        // single query 
+        const query = `
+        UPDATE users
+        SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $${index}
+        RETURNING id, name, email, role, created_at, updated_at
+        `;
+
+        const updateUser = await pool.query(query, values);
+
+        res.status(200).json({
+            success: true,
+            message: "User updated successfully",
+            data: updateUser.rows[0],
+        });
+
+    } catch (error) {
+        console.error("user update failed : ", error);
+        res.status(500).json({
+            success: false,
+            message: "internal server error",
+        })
+    }
+})
+
+
+// delete user by ID
+router.delete("/:id", async(req, res) => {
+    try {
+        const {id} = req.body;
+        if(!id) {
+            return res.status(400).json({
+                success: false,
+                message: "ID required",
+            });
+        };
+
+        // user exists
+        const check_user = await pool.query("SELECT * FROM users WHERE id = $1", [id])
+        if(check_user.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "user not found",
+            })
+        }
+
+
+        const user_deletation = await pool.query("DELETE FROM users WHERE id = $1 RETURNING id, name, email ", [id]);
+
+        res.status(200).json({
+            success: true,
+            message: "User deleted successfully",
+            data: user_deletation.rows[0],
+        })
+    } catch (error) {
+        console.error("user delation failed : ", error);
+        res.status(500).json({
+            success: false,
+            message: "Internal server error",
+        });
+    };
+});
+
+
+
+
 export default router;
