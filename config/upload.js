@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+dotenv.config();
 export const UPLOAD_CONFIG = {
     // image config
     image: {

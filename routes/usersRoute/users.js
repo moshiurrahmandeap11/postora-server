@@ -1,7 +1,16 @@
 import bcrypt from "bcrypt";
+import dotenv from "dotenv";
 import { Router } from "express";
+import fs from "fs";
 import jwt from "jsonwebtoken";
+import path from "path";
+import { fileURLToPath } from "url";
 import pool from "../../database/db.js";
+import { upload } from "../../middleware/multerConfig.js";
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = Router();
 const saltRounds = 10;
@@ -9,7 +18,7 @@ const saltRounds = 10;
 // get all users from postgres db
 router.get("/", async(req, res) => {
     try {
-        const result = await pool.query("SELECT id, name, email, role, created_at, updated_at from users");
+        const result = await pool.query("SELECT id, name, email, role, profile_picture_url, created_at, updated_at from users");
         if(result.rows.length === 0) {
             return res.status(400).json({
                 success: true,
@@ -163,6 +172,116 @@ router.post("/signin", async(req, res) => {
             message: "internal server error",
         });
     };
+});
+
+
+// profile picture upload
+router.patch("/profile-picture", upload.single("profile_picture"), async(req, res) => {
+    try {
+        if(!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: "No file uploaded",
+            });
+        };
+
+        const userId = req.user.id;
+        const file= req.file;
+
+        // create url
+        const baseUrl = process.env.BASE_URL;
+        const profilePictureUrl = `${baseUrl}/uploads/images/${file.filename}`;
+
+        // delete the old profile if exists
+        const oldProfile = await pool.query(
+            `SELECT profile_picture FROM users WHERE id = $1`, [userId]
+        );
+
+        if(oldProfile.rows[0]?.profile_picture) {
+            const oldPath = path.join(process.cwd(), 'uploads/images', oldProfile.rows[0].profile_picture);
+            if(fs.existsSync(oldPath)) {
+                fs.unlinkSync(oldPath);
+            }
+        }
+
+        // update the db
+        const result = await pool.query(
+            `UPDATE users
+            SET profile_picture = $1,
+            profile_picture_url = $2,
+            updated_at = CURRENT_TIMESTAMP
+            WHERE id = $3
+            RETURNING id, name, email, profile_picture, profile_picture_url
+            `, [file.filename, profilePictureUrl, userId]
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Profile picture uploaded successfully",
+            data: result.rows[0],
+        });
+    } catch (error) {
+        console.error("Profile picture upload failed: ", error);
+        
+        // if error then delete the file
+        if(req.file) {
+            fs.unlinkSync(req.file.path);
+        }
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to upload profile picture"
+        });
+    }
+});
+
+
+// delete profile picture
+router.delete("/profile-picture", async(req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // take user profile info
+        const user = await pool.query(
+            "SELECT profile_picture FROM users WHERE id = $1", [userId]
+        );
+
+        if(!user.rows[0]?.profile_picture) {
+            return res.status(404).json({
+                success: false,
+                message: "No profile picture found"
+            });
+        }
+
+        // delete the file
+        const filePath = path.join(process.cwd(), 'uploads/images', user.rows[0].profile_picture);
+        if(fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+
+
+        // update the database
+        await pool.query(
+            `UPDATE users
+            SET profile_picture = NULL,
+            profile_picture_url = NULL,
+            updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+            `, [userId]
+        );
+
+
+        res.status(200).json({
+            success: true,
+            message: "Profile picture deleted successfully"
+        });
+    } catch (error) {
+        console.error("Profile picture deletion failed: ", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to delete profile picture"
+        });
+    }
 });
 
 

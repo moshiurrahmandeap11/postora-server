@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { uploadController } from '../controllers/uploadController.js';
+import pool from '../database/db.js';
 import { authenticate } from '../middleware/auth.js';
 import { multiUpload, upload } from '../middleware/multerConfig.js';
 
