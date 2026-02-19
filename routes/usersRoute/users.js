@@ -490,7 +490,8 @@ router.patch("/:id", async(req, res) => {
 // delete user by ID
 router.delete("/:id", async(req, res) => {
     try {
-        const {id} = req.body;
+        const {id} = req.params;
+        console.log("delete id", id);
         if(!id) {
             return res.status(400).json({
                 success: false,
