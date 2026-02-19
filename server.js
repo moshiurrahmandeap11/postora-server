@@ -8,7 +8,7 @@ import { connectDB } from "./database/db.js";
 dotenv.config();
 const port = process.env.PORT;
 
-// ✅ __dirname তৈরি করুন
+//  __dirname তৈরি করুন
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -37,7 +37,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// ✅ সবচেয়ে গুরুত্বপূর্ণ: static files serve করুন
+// static files serve করুন
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // connect with db
