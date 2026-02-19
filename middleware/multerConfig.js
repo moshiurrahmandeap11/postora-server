@@ -1,41 +1,54 @@
+// middleware/multerConfig.js
 import multer from "multer";
 import path from "path";
 import { UPLOAD_CONFIG } from "../config/upload.js";
-import { FileHelper } from "../utils/fileHelper.js";
+import { FileHelper } from "../utils/fileHelper.js"; // ✅ এই import ঠিক আছে
 
 // storage configuration
 const storage = multer.diskStorage({
     destination: async (req, file , cb) => {
-        const fileType = FileHelper.detectFileType(file.mimetype);
-        const uploadPath = path.join(
-            process.cwd(),
-            UPLOAD_CONFIG.localPath[fileType] || "uploads/others"
-        );
+        try {
+            const fileType = FileHelper.detectFileType(file.mimetype);
+            const uploadPath = path.join(
+                process.cwd(),
+                UPLOAD_CONFIG.localPath[fileType] || "uploads/others"
+            );
 
-        await FileHelper.ensureDir(uploadPath);
-        cb(null, uploadPath);
+            await FileHelper.ensureDir(uploadPath);  // ✅ এখন কাজ করবে
+            cb(null, uploadPath);
+        } catch (error) {
+            cb(error, null);
+        }
     },
 
     filename: (req, file, cb) => {
-        const fileName = FileHelper.generateFileName(file.originalname);
-        cb(null, fileName);
+        try {
+            const fileName = FileHelper.generateFileName(file.originalname);
+            cb(null, fileName);
+        } catch (error) {
+            cb(error, null);
+        }
     }
 });
 
 // file filter
 const fileFilter = (req, file, cb) => {
-    const fileType = FileHelper.detectFileType(file.mimetype);
-    const config = UPLOAD_CONFIG[fileType];
+    try {
+        const fileType = FileHelper.detectFileType(file.mimetype);
+        const config = UPLOAD_CONFIG[fileType];
 
-    if(!config) {
-        return cb(new Error("Unsupported file type"), false);
+        if(!config) {
+            return cb(new Error("Unsupported file type"), false);
+        }
+
+        if(!config.allowedTypes.includes(file.mimetype)) {
+            return cb(new Error(`File type ${file.mimetype} not allowed`), false);
+        }
+
+        cb(null, true);
+    } catch (error) {
+        cb(error, false);
     }
-
-    if(!config.allowedTypes.includes(file.mimetype)) {
-        return cb(new Error(`File type ${file.mimetype} not allowed`), false);
-    }
-
-    cb(null, true);
 };
 
 // multer instance
@@ -48,9 +61,9 @@ export const upload = multer({
 });
 
 
-// multiple file upload
+// multiple file upload - টাইপো fix করুন
 export const multiUpload = upload.fields([
-    {name: "image", maxCount: 10},
-    {name: "vidoes", maxCount: 3},
+    {name: "images", maxCount: 10},  // "image" -> "images"
+    {name: "videos", maxCount: 3},   // "vidoes" -> "videos"
     {name: "documents", maxCount: 5}
 ]);

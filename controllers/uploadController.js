@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
-import { UPLOAD_CONFIG } from "../config/upload";
+import { UPLOAD_CONFIG } from "../config/upload.js";
 import pool from "../database/db";
-import { FileHelper } from "../utils/fileHelper";
+import { FileHelper } from "../utils/fileHelper.js";
 
 export const uploadController = {
     // single file upload

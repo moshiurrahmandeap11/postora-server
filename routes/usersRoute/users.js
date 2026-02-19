@@ -175,7 +175,7 @@ router.post("/signin", async(req, res) => {
 });
 
 
-// profile picture upload
+// profile picture upload (authenticate ছাড়া)
 router.patch("/profile-picture", upload.single("profile_picture"), async(req, res) => {
     try {
         if(!req.file) {
@@ -185,12 +185,35 @@ router.patch("/profile-picture", upload.single("profile_picture"), async(req, re
             });
         };
 
-        const userId = req.user.id;
-        const file= req.file;
+        // 🔥 IMPORTANT: body থেকে userId নিন (headers থেকে না)
+        const userId = req.body.userId;
+        
+        if (!userId) {
+            // error হলে আপলোড করা ফাইল ডিলিট করুন
+            if(req.file) {
+                fs.unlinkSync(req.file.path);
+            }
+            return res.status(400).json({
+                success: false,
+                message: "User ID is required",
+            });
+        }
+
+        const file = req.file;
 
         // create url
-        const baseUrl = process.env.BASE_URL;
+        const baseUrl = process.env.BASE_URL ;
         const profilePictureUrl = `${baseUrl}/uploads/images/${file.filename}`;
+
+        // ইউজার আছে কিনা চেক করুন
+        const userCheck = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
+        if(userCheck.rows.length === 0) {
+            fs.unlinkSync(file.path);
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
 
         // delete the old profile if exists
         const oldProfile = await pool.query(
@@ -236,10 +259,27 @@ router.patch("/profile-picture", upload.single("profile_picture"), async(req, re
 });
 
 
-// delete profile picture
+// delete profile picture (authenticate ছাড়া)
 router.delete("/profile-picture", async(req, res) => {
     try {
-        const userId = req.user.id;
+        // 🔥 IMPORTANT: body থেকে userId নিন
+        const userId = req.body.userId;
+        
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: "User ID is required",
+            });
+        }
+
+        // ইউজার আছে কিনা চেক করুন
+        const userCheck = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
+        if(userCheck.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
 
         // take user profile info
         const user = await pool.query(
@@ -259,7 +299,6 @@ router.delete("/profile-picture", async(req, res) => {
             fs.unlinkSync(filePath);
         }
 
-
         // update the database
         await pool.query(
             `UPDATE users
@@ -269,7 +308,6 @@ router.delete("/profile-picture", async(req, res) => {
             WHERE id = $1
             `, [userId]
         );
-
 
         res.status(200).json({
             success: true,
@@ -393,7 +431,10 @@ router.patch("/:id", async(req, res) => {
         // email update
         if(email) {
             // email must be unique
-            const email_check = await pool.query("SELECT id FROM users WHERE email = $1 AND id != $1", [email.toLowerCase(), id])
+const email_check = await pool.query(
+    "SELECT id FROM users WHERE email = $1 AND id != $2", 
+    [email.toLowerCase(), id]
+);
             if(email_check.rows.length > 0 ) {
                 return res.status(409).json({
                     success: false,

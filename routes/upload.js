@@ -3,11 +3,10 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { uploadController } from '../controllers/uploadController.js';
 import pool from '../database/db.js';
-import { authenticate } from '../middleware/auth.js';
+// import { authenticate } from '../middleware/auth.js'; // পরে যোগ করবেন
 import { multiUpload, upload } from '../middleware/multerConfig.js';
 
 const router = Router();
-
 
 const uploadLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -15,9 +14,8 @@ const uploadLimiter = rateLimit({
     message: 'Too many uploads, please try again later'
 });
 
-
-router.use(authenticate);
-
+// আপাতত authenticate ছাড়া
+// router.use(authenticate);
 
 router.post(
     '/single', 
@@ -26,7 +24,6 @@ router.post(
     uploadController.uploadSingle
 );
 
-
 router.post(
     '/multiple',
     uploadLimiter,
@@ -34,15 +31,13 @@ router.post(
     uploadController.uploadMultiple
 );
 
-
 router.delete('/:id', uploadController.deleteFile);
-
 
 router.get('/list', async (req, res) => {
     try {
+        // আপাতত user_id ছাড়া
         const files = await pool.query(
-            'SELECT * FROM files WHERE user_id = $1 ORDER BY created_at DESC',
-            [req.user.id]
+            'SELECT * FROM files ORDER BY created_at DESC'
         );
         
         res.status(200).json({
