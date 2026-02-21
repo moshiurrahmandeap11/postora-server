@@ -8,11 +8,12 @@ import { connectDB } from "./database/db.js";
 dotenv.config();
 const port = process.env.PORT;
 
-//  __dirname তৈরি করুন
+//  __dirname 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // import routes
+import projects from "./routes/projectsRoute/projects.js";
 import forgotPassword from "./routes/usersRoute/forgot-password.js";
 import users from "./routes/usersRoute/users.js";
 
@@ -37,7 +38,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// static files serve করুন
+// static files serve 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // connect with db
@@ -46,6 +47,7 @@ connectDB();
 // api endpoints
 app.use("/api/users", users);
 app.use("/api/users", forgotPassword);
+app.use("/api/projects", projects);
 
 app.get("/", async(req, res) => {
     res.send("postora server running rapidly");
